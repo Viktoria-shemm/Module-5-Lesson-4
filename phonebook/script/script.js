@@ -1,28 +1,4 @@
 "use strict";
-
-const data = [
-  {
-    name: "Иван",
-    surname: "Петров",
-    phone: "+79514545454",
-  },
-  {
-    name: "Игорь",
-    surname: "Семёнов",
-    phone: "+79999999999",
-  },
-  {
-    name: "Семён",
-    surname: "Иванов",
-    phone: "+79800252525",
-  },
-  {
-    name: "Мария",
-    surname: "Попова",
-    phone: "+79876543210",
-  },
-];
-
 {
   const createContainer = () => {
     const container = document.createElement("div");
@@ -160,6 +136,18 @@ const data = [
     };
   };
 
+  const getStorage = (key) => {
+    return localStorage.getItem(key)
+      ? JSON.parse(localStorage.getItem(key))
+      : [];
+  };
+
+  const setStorage = (key, newObject) => {
+    const data = getStorage(key);
+    data.push(newObject);
+    localStorage.setItem(key, JSON.stringify(data));
+  };
+
   const createRow = ({ name, surname, phone }) => {
     const tr = document.createElement("tr");
     tr.classList.add("contact");
@@ -194,6 +182,8 @@ const data = [
     return allRow;
   };
 
+  const data = getStorage('contacts');
+
   const createFooter = (title) => {
     const footer = document.createElement("footer");
     footer.classList.add("footer");
@@ -224,11 +214,11 @@ const data = [
       },
     ]);
     const table = createTable();
-    const form = createForm();
+    const { form, overlay } = createForm();
     const footer = createFooter(title);
 
     header.headerContainer.append(logo);
-    main.mainContainer.append(buttonGroup.btnWrapper, table, form.overlay);
+    main.mainContainer.append(buttonGroup.btnWrapper, table, overlay);
     app.append(header, main, footer);
 
     return {
@@ -236,8 +226,8 @@ const data = [
       logo,
       btnAdd: buttonGroup.btns[0],
       btnDel: buttonGroup.btns[1],
-      formOverlay: form.overlay,
-      form: form.form,
+      formOverlay: overlay,
+      form,
       btnCancel: form.btnCancel,
       btnClose: form.btnClose,
     };
@@ -255,59 +245,102 @@ const data = [
     });
   };
 
-  const init = (selectorApp, title) => {
-    const app = document.querySelector(selectorApp);
-    const phoneBook = renderPhoneBook(app, title);
-
-    const { 
-      list, 
-      logo, 
-      btnAdd, 
-      formOverlay, 
-      form, 
-      btnCancel, 
-      btnClose, 
-      btnDel 
-     } = phoneBook;
-
-    //Функционал
-
-    const allRow = renderContacts(list, data);
-
-    hoverRow(allRow, logo);
-
-    btnAdd.addEventListener("click", () => {
+  const modalControl = (btnAdd, formOverlay) => {
+    const openModal = () => {
       formOverlay.classList.add("is-visible");
-    });
+    };
+
+    const closeModal = () => {
+      formOverlay.classList.remove("is-visible");
+    };
+
+    btnAdd.addEventListener("click", openModal);
 
     formOverlay.addEventListener("click", (e) => {
       const target = e.target;
-      if(target === formOverlay){
-        formOverlay.classList.remove("is-visible");
+      if (
+        target === formOverlay ||
+        target.closest(".close") ||
+        target.closest(".btn-danger")
+      ) {
+        closeModal();
       }
     });
 
-    btnCancel.addEventListener("click", () => {
-      formOverlay.classList.remove("is-visible");
-    });
+    return {
+      closeModal,
+    };
+  };
 
-    btnClose.addEventListener("click", () => {
-      formOverlay.classList.remove("is-visible");
-    });
+  const removeStorage = (key, number) => {
+    const currentData = getStorage(key);
+    const updatedData = currentData.filter(
+      (contact) => contact.phone !== number
+    );
+    localStorage.setItem(key, JSON.stringify(updatedData));
+  };
 
+  const deleteControl = (btnDel, list) => {
     btnDel.addEventListener("click", () => {
-      document.querySelectorAll(".delete").forEach(del => {
+      document.querySelectorAll(".delete").forEach((del) => {
         del.classList.toggle("is-visible");
-      })
+      });
     });
 
     list.addEventListener("click", (e) => {
       const target = e.target;
-      if(target.closest(".del-icon")) {
+
+      if (target.closest(".del-icon")) {
         target.closest(".contact").remove();
       }
-    });
 
+      const number = target.closest(".contact").querySelector("a").textContent;
+      
+      removeStorage("contacts", number);
+    });
+  };
+
+  const addContactPage = (contact, list) => {
+    list.append(createRow(contact));
+  };
+
+  const formControl = (form, list, closeModal) => {
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const target = e.target;
+      const formData = new FormData(target);
+
+      const newContact = Object.fromEntries(formData);
+
+      const existingContacts = getStorage("contacts");
+      if (existingContacts.some(contact => contact.phone === newContact.phone)) {
+        alert("Контакт с таким номером уже существует.");
+        return;
+      }
+
+      addContactPage(newContact, list);
+      setStorage("contacts", newContact);
+      form.reset();
+      closeModal();
+    });
+  };
+
+  const init = (selectorApp, title) => {
+    const app = document.querySelector(selectorApp);
+
+    const { list, logo, btnAdd, formOverlay, btnDel, form } = renderPhoneBook(
+      app,
+      title
+    );
+
+    //Функционал
+
+    const allRow = renderContacts(list, data);
+    const { closeModal } = modalControl(btnAdd, formOverlay);
+
+    hoverRow(allRow, logo);
+    deleteControl(btnDel, list);
+    formControl(form, list, closeModal);
   };
 
   window.phoneBookInit = init;
